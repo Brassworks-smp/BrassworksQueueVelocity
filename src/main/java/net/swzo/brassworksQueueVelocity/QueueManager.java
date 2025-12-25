@@ -34,7 +34,7 @@ public class QueueManager {
     }
 
     public void addToQueue(Player player) {
-        if (isQueued(player)) return; 
+        if (isQueued(player)) return;
 
         if (player.hasPermission("bwqueue.admin")) {
             adminQueue.add(player);
@@ -65,19 +65,21 @@ public class QueueManager {
         if (backend == null) return;
 
         backend.ping().whenComplete((serverPing, throwable) -> {
-            int realOnline = (serverPing != null) ? serverPing.getPlayers().map(p -> p.getOnline()).orElse(0) : 0;
-            int realMax = (serverPing != null) ? serverPing.getPlayers().map(p -> p.getMax()).orElse(config.hardMaxPlayers) : config.hardMaxPlayers;
+            boolean isOnline = (serverPing != null && throwable == null);
 
-            processSingleQueue(adminQueue, backend, realOnline, realMax, true);
+            int realOnline = (isOnline) ? serverPing.getPlayers().map(p -> p.getOnline()).orElse(0) : 0;
+            int realMax = (isOnline) ? serverPing.getPlayers().map(p -> p.getMax()).orElse(config.hardMaxPlayers) : config.hardMaxPlayers;
 
-            int filledSlots = processSingleQueue(priorityQueue, backend, realOnline, realMax, false);
-            realOnline += filledSlots;
+            processSingleQueue(adminQueue, backend, realOnline, realMax, true, isOnline);
 
-            processSingleQueue(regularQueue, backend, realOnline, realMax, false);
+            int filledSlots = processSingleQueue(priorityQueue, backend, realOnline, realMax, false, isOnline);
+            if (isOnline) realOnline += filledSlots;
+
+            processSingleQueue(regularQueue, backend, realOnline, realMax, false, isOnline);
         });
     }
 
-    private int processSingleQueue(ConcurrentLinkedQueue<Player> queue, RegisteredServer backend, int realOnline, int realMax, boolean bypass) {
+    private int processSingleQueue(ConcurrentLinkedQueue<Player> queue, RegisteredServer backend, int realOnline, int realMax, boolean bypass, boolean isBackendOnline) {
         if (queue.isEmpty()) return 0;
 
         int movedPlayers = 0;
@@ -94,11 +96,10 @@ public class QueueManager {
             }
 
             if (!isConnectedToLimbo(player)) {
-
                 continue;
             }
 
-            if (position == 1 && (bypass || realOnline < realMax)) {
+            if (isBackendOnline && position == 1 && (bypass || realOnline < realMax)) {
                 logger.info("[Brassworks Queue] Sending {} to backend.", player.getUsername());
                 sendExitJson(player);
                 player.createConnectionRequest(backend).fireAndForget();
