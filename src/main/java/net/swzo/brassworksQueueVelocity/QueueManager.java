@@ -20,6 +20,8 @@ public class QueueManager {
     private final ConcurrentLinkedQueue<Player> priorityQueue = new ConcurrentLinkedQueue<>();
     private final ConcurrentLinkedQueue<Player> regularQueue = new ConcurrentLinkedQueue<>();
 
+    private static final int MAX_JOINS_PER_TICK = 1;
+
     public QueueManager(ProxyServer server, Logger logger, QueueConfig config, PriorityStorage priorityStorage) {
         this.server = server;
         this.logger = logger;
@@ -35,7 +37,6 @@ public class QueueManager {
 
     public void addToQueue(Player player) {
         if (isQueued(player)) return;
-
         if (player.hasPermission("bwqueue.admin")) {
             adminQueue.add(player);
             logger.info("[Brassworks Queue] Added {} to ADMIN queue.", player.getUsername());
@@ -46,14 +47,11 @@ public class QueueManager {
             regularQueue.add(player);
             logger.info("[Brassworks Queue] Added {} to REGULAR queue.", player.getUsername());
         }
-
         forceUpdate(player);
     }
 
     public void forceUpdate(Player player) {
-        server.getScheduler().buildTask(server.getPluginManager().getPlugin("brassworksqueuevelocity").get().getInstance().get(), this::processQueue)
-                .delay(50, TimeUnit.MILLISECONDS)
-                .schedule();
+        server.getScheduler().buildTask(server.getPluginManager().getPlugin("brassworksqueuevelocity").get().getInstance().get(), this::processQueue).delay(50, TimeUnit.MILLISECONDS).schedule();
     }
 
     public boolean isQueued(Player player) {
@@ -66,20 +64,22 @@ public class QueueManager {
 
         backend.ping().whenComplete((serverPing, throwable) -> {
             boolean isOnline = (serverPing != null && throwable == null);
-
             int realOnline = (isOnline) ? serverPing.getPlayers().map(p -> p.getOnline()).orElse(0) : 0;
             int realMax = (isOnline) ? serverPing.getPlayers().map(p -> p.getMax()).orElse(config.hardMaxPlayers) : config.hardMaxPlayers;
 
-            processSingleQueue(adminQueue, backend, realOnline, realMax, true, isOnline);
+            int sentThisTick = 0;
+            int sentAdmins = processSingleQueue(adminQueue, backend, realOnline, realMax, true, isOnline, MAX_JOINS_PER_TICK - sentThisTick);
+            sentThisTick += sentAdmins;
+            realOnline += sentAdmins;
+            int sentPriority = processSingleQueue(priorityQueue, backend, realOnline, realMax, false, isOnline, MAX_JOINS_PER_TICK - sentThisTick);
+            sentThisTick += sentPriority;
+            realOnline += sentPriority;
 
-            int filledSlots = processSingleQueue(priorityQueue, backend, realOnline, realMax, false, isOnline);
-            if (isOnline) realOnline += filledSlots;
-
-            processSingleQueue(regularQueue, backend, realOnline, realMax, false, isOnline);
+            processSingleQueue(regularQueue, backend, realOnline, realMax, false, isOnline, MAX_JOINS_PER_TICK - sentThisTick);
         });
     }
 
-    private int processSingleQueue(ConcurrentLinkedQueue<Player> queue, RegisteredServer backend, int realOnline, int realMax, boolean bypass, boolean isBackendOnline) {
+    private int processSingleQueue(ConcurrentLinkedQueue<Player> queue, RegisteredServer backend, int realOnline, int realMax, boolean bypass, boolean isBackendOnline, int allowedToSend) {
         if (queue.isEmpty()) return 0;
 
         int movedPlayers = 0;
@@ -88,30 +88,26 @@ public class QueueManager {
 
         while (iterator.hasNext()) {
             Player player = iterator.next();
-
             if (!player.isActive() || isConnectedToBackend(player)) {
                 sendExitJson(player);
                 iterator.remove();
                 continue;
             }
 
-            if (!isConnectedToLimbo(player)) {
-                continue;
-            }
+            if (!isConnectedToLimbo(player)) continue;
+            boolean canSend = isBackendOnline && (bypass || realOnline < realMax);
 
-            if (isBackendOnline && position == 1 && (bypass || realOnline < realMax)) {
+            if (position == 1 && canSend && allowedToSend > 0) {
                 logger.info("[Brassworks Queue] Sending {} to backend.", player.getUsername());
                 sendExitJson(player);
                 player.createConnectionRequest(backend).fireAndForget();
+
                 iterator.remove();
-
-                if (!bypass) {
-                    realOnline++;
-                    movedPlayers++;
-                }
+                if (!bypass) realOnline++;
+                movedPlayers++;
+                allowedToSend--; 
             } else {
-
-                int estTime = position * 2; 
+                int estTime = position * 2;
                 sendQueueJson(player, position, queue.size(), estTime);
                 position++;
             }
