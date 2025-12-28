@@ -13,7 +13,7 @@ import java.nio.file.Path;
 @Plugin(
         id = "brassworksqueuevelocity",
         name = "BrassworksQueueVelocity",
-        version = "1.0.0",
+        version = "1.1.0",
         url = "https://brassworks.opnsoc.org/",
         authors = {"swzo"}
 )
@@ -26,6 +26,7 @@ public class BrassworksQueueVelocity {
     private QueueConfig config;
     private PriorityStorage priorityStorage;
     private QueueManager queueManager;
+    private TotalPlayerCountManager totalPlayerCountManager;
 
     @Inject
     public BrassworksQueueVelocity(ProxyServer server, Logger logger, @DataDirectory Path dataDirectory) {
@@ -45,6 +46,8 @@ public class BrassworksQueueVelocity {
 
         this.queueManager = new QueueManager(server, logger, config, priorityStorage);
         this.queueManager.startTask();
+
+        this.totalPlayerCountManager = new TotalPlayerCountManager(server);
 
         server.getEventManager().register(this, new QueueListener(server, queueManager, config, logger));
         server.getCommandManager().register(
