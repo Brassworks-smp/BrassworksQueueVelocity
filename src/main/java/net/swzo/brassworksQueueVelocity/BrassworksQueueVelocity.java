@@ -2,10 +2,14 @@ package net.swzo.brassworksQueueVelocity;
 
 import com.google.inject.Inject;
 import com.velocitypowered.api.event.Subscribe;
+import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
+import com.velocitypowered.api.event.proxy.ProxyPingEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
+import com.velocitypowered.api.proxy.server.ServerPing;
+import net.kyori.adventure.text.Component;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
@@ -33,6 +37,26 @@ public class BrassworksQueueVelocity {
         this.server = server;
         this.logger = logger;
         this.dataDirectory = dataDirectory;
+    }
+
+    @Subscribe
+    public void onProxyPing(ProxyPingEvent event) {
+        // 1. Get the sum from your existing manager
+        int totalOnline = totalPlayerCountManager.getTotalPlayerCount();
+        int maxPlayers = 30;
+
+        ServerPing.Builder pingBuilder = event.getPing().asBuilder();
+
+        pingBuilder.onlinePlayers(totalOnline);
+        pingBuilder.maximumPlayers(maxPlayers);
+
+        event.setPing(pingBuilder.build());
+    }
+
+    @Subscribe
+    public void onPlayerJoin(ServerConnectedEvent event) {
+        int total = totalPlayerCountManager.getTotalPlayerCount();
+        event.getPlayer().sendMessage(Component.text("Total players online: " + total));
     }
 
     @Subscribe
