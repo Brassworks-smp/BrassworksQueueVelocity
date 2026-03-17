@@ -1,6 +1,7 @@
 package net.swzo.brassworksQueueVelocity;
 
 import com.velocitypowered.api.event.Subscribe;
+import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.player.ServerPostConnectEvent;
@@ -50,20 +51,31 @@ public class QueueListener {
     }
 
     @Subscribe
+    public void onDisconnect(DisconnectEvent event) {
+
+        queueManager.handleDisconnect(event.getPlayer().getUniqueId());
+    }
+
+    @Subscribe
     public void onKick(KickedFromServerEvent event) {
         if (!event.getServer().getServerInfo().getName().equals(config.backendServer)) return;
 
+        queueManager.markFinished(event.getPlayer());
         if (event.kickedDuringServerConnect()) {
 
-        }
+            queueManager.triggerCooldown();
+            RegisteredServer limbo = server.getServer(config.limboServer).orElse(null);
 
-        RegisteredServer limbo = server.getServer(config.limboServer).orElse(null);
-
-        if (limbo != null) {
+            if (limbo != null) {
+                Optional<Component> reason = event.getServerKickReason();
+                Component message = reason.orElse(Component.text("Connection lost."));
+                event.setResult(KickedFromServerEvent.RedirectPlayer.create(limbo, message));
+                queueManager.addToQueue(event.getPlayer());
+            }
+        } else {
             Optional<Component> reason = event.getServerKickReason();
-            Component message = reason.orElse(Component.text("Connection lost."));
-            event.setResult(KickedFromServerEvent.RedirectPlayer.create(limbo, message));
-            queueManager.addToQueue(event.getPlayer());
+            Component message = reason.orElse(Component.text("You were kicked from the server."));
+            event.setResult(KickedFromServerEvent.DisconnectPlayer.create(message));
         }
     }
 }

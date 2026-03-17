@@ -4,6 +4,7 @@ import com.moandjiezana.toml.Toml;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,8 +31,21 @@ public class QueueConfig {
 
             if (!file.exists()) {
                 try (InputStream in = getClass().getResourceAsStream("/config.toml")) {
-                    if (in != null) Files.copy(in, file.toPath());
-                    else Files.createFile(file.toPath());
+                    if (in != null) {
+                        Files.copy(in, file.toPath());
+                    } else {
+
+                        logger.warn("[Brassworks Queue] config.toml resource not found. Creating default config manually.");
+                        try (FileWriter writer = new FileWriter(file)) {
+                            writer.write("# Brassworks Queue Configuration\n\n");
+                            writer.write("[servers]\n");
+                            writer.write("limbo = \"limbo\"\n");
+                            writer.write("backend = \"survival\"\n\n");
+                            writer.write("[settings]\n");
+                            writer.write("max_players = 30\n");
+                            writer.write("refresh_rate_ms = 1000\n");
+                        }
+                    }
                 }
             }
 
@@ -42,7 +56,7 @@ public class QueueConfig {
             refreshRateMs = toml.getLong("settings.refresh_rate_ms", 1000L).intValue();
 
         } catch (Exception e) {
-            logger.error("[Brassworks Queue] Failed to load config, using defaults.", e);
+            logger.error("[Brassworks Queue] Failed to load config.toml", e);
         }
     }
 }

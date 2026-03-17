@@ -17,7 +17,7 @@ import java.nio.file.Path;
 @Plugin(
         id = "brassworksqueuevelocity",
         name = "BrassworksQueueVelocity",
-        version = "1.1.0",
+        version = "1.2.0",
         url = "https://brassworks.opnsoc.org/",
         authors = {"swzo"}
 )
@@ -41,7 +41,6 @@ public class BrassworksQueueVelocity {
 
     @Subscribe
     public void onProxyPing(ProxyPingEvent event) {
-        // 1. Get the sum from your existing manager
         int totalOnline = totalPlayerCountManager.getTotalPlayerCount();
         int maxPlayers = 30;
 
