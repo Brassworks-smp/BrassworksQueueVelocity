@@ -8,12 +8,12 @@ import com.velocitypowered.api.event.player.ServerPostConnectEvent;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.slf4j.Logger;
 
 import java.util.Optional;
 
 public class QueueListener {
-
     private final ProxyServer server;
     private final QueueManager queueManager;
     private final QueueConfig config;
@@ -41,9 +41,8 @@ public class QueueListener {
                 .orElse("unknown");
 
         if (serverName.equals(config.limboServer)) {
-            if (queueManager.isQueued(event.getPlayer())) {
+            if (queueManager.isQueued(event.getPlayer()))
                 queueManager.forceUpdate(event.getPlayer());
-            }
         } else if (serverName.equals(config.backendServer)) {
             queueManager.sendExitJson(event.getPlayer());
             queueManager.removeFromQueue(event.getPlayer());
@@ -52,7 +51,6 @@ public class QueueListener {
 
     @Subscribe
     public void onDisconnect(DisconnectEvent event) {
-
         queueManager.handleDisconnect(event.getPlayer().getUniqueId());
     }
 
@@ -61,21 +59,26 @@ public class QueueListener {
         if (!event.getServer().getServerInfo().getName().equals(config.backendServer)) return;
 
         queueManager.markFinished(event.getPlayer());
-        if (event.kickedDuringServerConnect()) {
 
+        Optional<Component> reason = event.getServerKickReason();
+        Component message = reason.orElse(Component.text("You have been kicked from the Brassworks SMP server, Please Try again later..."));
+        String plainReason = PlainTextComponentSerializer.plainText().serialize(message).toLowerCase();
+
+        boolean shouldQueue = false;
+        String[] keywords = config.kickKeywords.split(",");
+        for (String keyword : keywords) {
+            if (!keyword.trim().isEmpty() && plainReason.contains(keyword.trim().toLowerCase())) {
+                shouldQueue = true;
+                break;
+            }
+        }
+        if (shouldQueue) {
             queueManager.triggerCooldown();
             RegisteredServer limbo = server.getServer(config.limboServer).orElse(null);
-
             if (limbo != null) {
-                Optional<Component> reason = event.getServerKickReason();
-                Component message = reason.orElse(Component.text("Connection lost."));
                 event.setResult(KickedFromServerEvent.RedirectPlayer.create(limbo, message));
                 queueManager.addToQueue(event.getPlayer());
-            }
-        } else {
-            Optional<Component> reason = event.getServerKickReason();
-            Component message = reason.orElse(Component.text("You were kicked from the server."));
-            event.setResult(KickedFromServerEvent.DisconnectPlayer.create(message));
-        }
+            } else event.setResult(KickedFromServerEvent.DisconnectPlayer.create(message));
+        } else event.setResult(KickedFromServerEvent.DisconnectPlayer.create(message));
     }
 }

@@ -18,6 +18,7 @@ public class QueueConfig {
     public String backendServer = "survival";
     public int hardMaxPlayers = 30;
     public int refreshRateMs = 1000;
+    public String kickKeywords = "ban,warn,strike";
 
     public QueueConfig(Path dataDirectory, Logger logger) {
         this.dataDirectory = dataDirectory;
@@ -34,7 +35,6 @@ public class QueueConfig {
                     if (in != null) {
                         Files.copy(in, file.toPath());
                     } else {
-
                         logger.warn("[Brassworks Queue] config.toml resource not found. Creating default config manually.");
                         try (FileWriter writer = new FileWriter(file)) {
                             writer.write("# Brassworks Queue Configuration\n\n");
@@ -44,6 +44,7 @@ public class QueueConfig {
                             writer.write("[settings]\n");
                             writer.write("max_players = 30\n");
                             writer.write("refresh_rate_ms = 1000\n");
+                            writer.write("kick_keywords = \"restart,shutdown,closed,full\"\n");
                         }
                     }
                 }
@@ -52,8 +53,9 @@ public class QueueConfig {
             toml = new Toml().read(file);
             limboServer = toml.getString("servers.limbo", "limbo");
             backendServer = toml.getString("servers.backend", "survival");
-            hardMaxPlayers = toml.getLong("settings.max_players", 50L).intValue();
+            hardMaxPlayers = toml.getLong("settings.max_players", 30L).intValue(); 
             refreshRateMs = toml.getLong("settings.refresh_rate_ms", 1000L).intValue();
+            kickKeywords = toml.getString("settings.kick_keywords", "restart,shutdown,closed,full");
 
         } catch (Exception e) {
             logger.error("[Brassworks Queue] Failed to load config.toml", e);
